@@ -16,6 +16,13 @@ class UserDataMaxRetryError(BaseException):
     def __str__(self):
         return self.msg
 
+class DataHiddenError(BaseException):
+    def __init__(self, msg: str):
+        self.msg = msg
+
+    def __str__(self):
+        return self.msg
+
 
 def md5(text):
     _md5 = hashlib.md5()
@@ -131,7 +138,9 @@ class GetUserInfo(MiHoYoCookie):
             return False
 
         elif retcode == "10102":  # 隐私设置
-            raise RuntimeError("用户设置了隐私")
+            raise DataHiddenError("用户设置了隐私")
+            # print("用户设置了隐私")
+            # return False
 
         elif retcode == "10101":  # 触发30次上限, 标记此cookie, 今天将不再使用
             self.check_limit(cookie=cookie, to_limit=True)
@@ -160,8 +169,9 @@ class GetUserInfo(MiHoYoCookie):
         if not stat:
             if self.scount >= 2:
                 raise UserDataMaxRetryError("已达到最大出错次数, 请检查您的cookie")
-            self.scount += 1
-            return self._get_user_info(uid, func_call, func_ret)  # 出错(cookie过期或失效)重试
+            if getdata["retcode"] != '10102':
+                self.scount += 1
+                return self._get_user_info(uid, func_call, func_ret)  # 出错(cookie过期或失效)重试
 
         self.scount = 0  # 重置计数
 

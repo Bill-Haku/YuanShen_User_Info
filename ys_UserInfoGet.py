@@ -5,9 +5,11 @@ import time
 import random
 import json
 import os
+import openpyxl
+from ys_api import main as ysmain, UserDataMaxRetryError
 import ys_api
 from ys_api import structs as ysstructs
-from ys_api import UserDataMaxRetryError
+from ys_api import DataHiddenError
 from ys_api.cookie_set import timestamp_to_text
 
 # Github-@lulu666lulu https://github.com/Azure99/GenshinPlayerQuery/issues/20
@@ -27,6 +29,7 @@ b=body q=query
 '''
 
 id2name = None
+
 
 def calcStringLength(text):
     # 令len(str(string).encode()) = m, len(str(string)) = n
@@ -69,6 +72,7 @@ def elementDict(text, isOculus=False):
     elif not isOculus:
         return elementProperty + "属性"
 
+
 def char_id_to_name(udata: ysstructs.GenshinUserData, charid: int):  # id2name.json数据不全, 我也懒得去搜集了, 故采用此邪道方法(
     chars = udata.avatars
     for char in chars:
@@ -82,6 +86,7 @@ def char_id_to_name(udata: ysstructs.GenshinUserData, charid: int):  # id2name.j
         return id2name[str(charid)]
     return f"{charid}"
 
+
 def abyssAnalysis(aby: ysstructs.GenshinShenJingLuoXuan, udata: ysstructs.GenshinUserData):
     if not aby.floors:  # 没打
         return ""
@@ -94,7 +99,6 @@ def abyssAnalysis(aby: ysstructs.GenshinShenJingLuoXuan, udata: ysstructs.Genshi
               f"元素战技: {char_id_to_name(udata, aby.normal_skill_rank[0].avatar_id)} - {aby.normal_skill_rank[0].value}\n\t" \
               f"元素爆发: {char_id_to_name(udata, aby.energy_skill_rank[0].avatar_id)} - {aby.energy_skill_rank[0].value}\n\t" \
               f"总星数: ★ {aby.total_star}\n\t"
-
 
     ftext = ""  # 层
     for floor in aby.floors:  # 层
@@ -113,6 +117,7 @@ def abyssAnalysis(aby: ysstructs.GenshinShenJingLuoXuan, udata: ysstructs.Genshi
 
     rettext = f"{rettext}楼层信息:{ftext}"
     return rettext
+
 
 def dataAnalysis(userid: str):
     req = ys_api.GetUserInfo()
@@ -236,7 +241,37 @@ def dataAnalysis(userid: str):
     else:
         Home_Info = "家园信息：\n\t" + "家园暂未开启！"
 
-    return (f"{Character_Info}\r\n{Account_Info}\r\n{Prestige_Info}\r\n{ExtraArea_Info}\r\n{Home_Info}\r\n\n{abyss_info}")
+    return (
+        f"{Character_Info}\r\n{Account_Info}\r\n{Prestige_Info}\r\n{ExtraArea_Info}\r\n{Home_Info}\r\n\n{abyss_info}")
+
+xlsxSheet = [['uid', 'Active Day Number', 'Spiral Abyss']]
+
+book_name_xlsx = 'Genshin Data.xlsx'
+
+sheet_name_xlsx = 'Data'
+
+def getData(userid: str):
+    req = ys_api.GetUserInfo()
+    # _sever = ysmain.uid2server(uid)
+    # _cookie = ysmain.GetUserInfo.get_cookie()
+    # getdata = json.loads(ysmain.GetInfo(uid, _sever[0], _cookie, overseas=_sever[1]))
+    data = req.get_user_info(userid)
+    activeDayNumber = str(data.stats.active_day_number)
+    spiralStatus = str(data.stats.spiral_abyss)
+    print(userid + ' ' + activeDayNumber)
+
+    xlsxSheet.append([userid, activeDayNumber, spiralStatus])
+
+def write_excel_xlsx(path, sheet_name, value):
+    index = len(value)
+    workbook = openpyxl.Workbook()
+    sheet = workbook.active
+    sheet.title = sheet_name
+    for i in range(0, index):
+        for j in range(0, len(value[i])):
+            sheet.cell(row=i + 1, column=j + 1, value=str(value[i][j]))
+    workbook.save(path)
+    print("xlsx格式表格写入数据成功！")
 
 
 def infoQuery(uid):
@@ -244,6 +279,7 @@ def infoQuery(uid):
         uid = str(int(uid))
     except:
         if uid == "exit" or uid == "q":
+            write_excel_xlsx(book_name_xlsx, sheet_name_xlsx, xlsxSheet)
             sys.exit(0)
         else:
             print("输入有误！")
@@ -265,8 +301,10 @@ def infoQuery(uid):
             print("UID输入有误！！\r\n请检查UID是否为国服UID！")
             return
 
-        UidInfo = dataAnalysis(uid)
-        print(f"uid {uid}({_server})的信息为:\r\n" + UidInfo)
+        uidData = getData(uid)
+
+        # UidInfo = dataAnalysis(uid)
+        # print(f"uid {uid}({_server})的信息为:\r\n" + UidInfo)
 
     else:
         print("UID长度有误！！\r\n请检查输入的UID是否为9位数！")
@@ -278,6 +316,15 @@ def sleep(maxSecond, queryOrder):
     time.sleep(sleepSec)
 
 
+def getRandomUid() -> str:
+    uid = random.randint(100000000, 210000000)
+    return str(uid)
+
+
+uid0 = '120052861'
+ii = 1
+i = 0
+
 if __name__ == "__main__":
     if len(sys.argv) > 1:
         for i in range(1, len(sys.argv)):
@@ -286,20 +333,32 @@ if __name__ == "__main__":
                 sleep(4, i + 1)  # sleep(最长等待时间, 即将执行的是第几次查询)
         quit()
     else:
+        while (ii <= 100):
+            uid0 += ' '
+            uid0 += getRandomUid()
+            ii += 1
+        uid0 += ' q'
+        uidList = uid0.split(' ')
+
         while True:
             try:
-                uid = input("请输入要查询的国服UID(多个UID请使用空格分隔，退出输入exit或q)：")
-                uidList = uid.split(' ')
-                i = 1
-                for uid in uidList:
-                    infoQuery(uid)
+                # uid = input("请输入要查询的国服UID(多个UID请使用空格分隔，退出输入exit或q)：")
+
+                while i < len(uidList):
+                    uid = uidList[i]
                     i += 1
+                    infoQuery(uid)
                     if i <= len(uidList):
                         sleep(4, i)
 
             except UserDataMaxRetryError:
                 print("已达到最大出错次数, 请检查您的cookie")
+                write_excel_xlsx(book_name_xlsx, sheet_name_xlsx, xlsxSheet)
                 break
+
+            except DataHiddenError as dhe:
+                print(dhe)
 
             except Exception as sb:
                 print(sb)
+                write_excel_xlsx(book_name_xlsx, sheet_name_xlsx, xlsxSheet)
